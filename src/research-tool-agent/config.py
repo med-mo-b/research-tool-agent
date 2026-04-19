@@ -8,6 +8,8 @@ class Settings(BaseSettings):
 
     hf_token: str = Field(..., description="The token for the Hugging Face API")
     model_id: str = Field(..., description="The ID of the model to use")
+
+    llm_provider: str = Field(default="huggingface", description="The provider of the LLM")
     
 @lru_cache
 def get_settings() -> Settings:

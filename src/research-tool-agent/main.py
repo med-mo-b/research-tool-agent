@@ -1,32 +1,37 @@
-from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
-from langchain.agents import create_agent
+from clients import get_llm_client
 from config import settings
+from langchain.agents import create_agent
+from tools import web_search_ddg
 
-def get_model() -> ChatHuggingFace:
-    llm_endpoint = HuggingFaceEndpoint(
-        repo_id=settings.model_id,
-        huggingfacehub_api_token=settings.hf_token,
-        task="text-generation",
-        max_new_tokens=1024,
-        temperature=0.8,
-        do_sample=True,
-        top_p=0.9,
-    )
-    return ChatHuggingFace(llm=llm_endpoint)
 
 def main():
-    print("Agent starting...") 
-    model = get_model()
-    
+    print("Initializing Research Agent...")
+
+    llm_client = get_llm_client(settings.llm_provider)
+    model = llm_client.get_model()
+
     agent = create_agent(
         model,
-        tools=[],
-        system_prompt="You are a helpful assistant. Answer clearly and concisely."
+        tools=[web_search_ddg],
+        system_prompt=(
+            "You are a helpful research assistant."
+            "If you don't know something or need current data, use your search tool."
+            "Always cite the URLs you found."
+        )
     )
-    result = agent.invoke({
-        "messages": [{"role": "user", "content": "Hello! Could you help me with some research?"}]
-    })
-    
+    query = "What are the latest news about Anthropic?"
+
+    result = agent.invoke(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": query,
+                }
+            ]
+        }
+    )
+
     print("\n--- Agent Response ---")
     print(result["messages"][-1].content)
 
