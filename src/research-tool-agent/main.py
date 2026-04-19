@@ -3,14 +3,16 @@ from langchain.agents import create_agent
 from config import settings
 
 def get_model() -> ChatHuggingFace:
-    model = HuggingFaceEndpoint(
-        name=settings.model_id,
+    llm_endpoint = HuggingFaceEndpoint(
+        repo_id=settings.model_id,
         huggingfacehub_api_token=settings.hf_token,
         task="text-generation",
-        max_new_tokens=512,
-        do_sample=False
+        max_new_tokens=1024,
+        temperature=0.8,
+        do_sample=True,
+        top_p=0.9,
     )
-    return ChatHuggingFace(llm=model)
+    return ChatHuggingFace(llm=llm_endpoint)
 
 def main():
     print("Agent starting...") 
@@ -18,15 +20,14 @@ def main():
     
     agent = create_agent(
         model,
-        tools=[], # Keine Tools, nur reiner Chat-Loop zum Testen
-        system_prompt="Du bist ein hilfreicher deutscher Forschungsassistent."
+        tools=[],
+        system_prompt="You are a helpful assistant. Answer clearly and concisely."
     )
-    
     result = agent.invoke({
-        "messages": [{"role": "user", "content": "Hallo! Kannst du mich bei Recherchen helfen?"}]
+        "messages": [{"role": "user", "content": "Hello! Could you help me with some research?"}]
     })
     
-    print("\n--- Agent Antwort ---")
+    print("\n--- Agent Response ---")
     print(result["messages"][-1].content)
 
 
