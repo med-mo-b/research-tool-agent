@@ -8,6 +8,9 @@ The project follows modern Python practices (including a `src` layout and `uv` a
 
 - **Port-Adapter (Hexagonal)**: The LLM is abstracted via the `LLMPort` protocol. The adapter (e.g., `HuggingFaceLLMAdapter`) can be easily swapped for on-premise (Ollama, vLLM) or cloud models (OpenAI, Anthropic) without modifying the agent logic.
 - **Tools as Capabilities**: Tools are implemented as simple, declarative `@tool` functions and extend the agent's capabilities without interfering with the core architecture.
+- **Middleware**: The agent uses LangChain middleware for a **dynamic system prompt** (`@dynamic_prompt`, tuned by runtime context) and **tool error handling** (`wrap_tool_call`), so failed tools return a clear `ToolMessage` instead of aborting the run.
+- **Runtime context**: Each chat turn passes an `AgentContext` (e.g. `user_role`: `user` | `expert` | `beginner`) into `agent.stream(...)`, which adjusts the system instructions without stuffing a static `SystemMessage` into the message list.
+- **Runtime tool registration (goal)**: The project should move toward **runtime tool registration** (dynamic tool sets exposed per model turn, e.g. via LangChain middleware such as `wrap_model_call` / `wrap_tool_call`) instead of relying only on a **static** tool list fixed at agent construction time. That better supports MCP server discovery, lazy connections, and per-session or per-tenant tool catalogs without overloading the model with every possible tool upfront.
 - **Configuration**: All secrets and environment variables are managed centrally in `config.py` using `pydantic-settings`.
 - **CLI via Typer**: The user interface is a dedicated `cli/` sub-package, fully decoupled from the agent logic. New commands can be added without touching existing code.
 
@@ -22,10 +25,14 @@ src/research_tool_agent/
 │   ├── __init__.py             # Factory function (Dependency Injection)
 │   ├── llm_port.py             # Protocol (Interface)
 │   └── llm_hf_adapter.py      # Concrete Adapter (HuggingFace)
-├── prompts/                    # System prompts
+├── middleware/                 # Agent middleware (errors, prompts)
+│   └── tool_error_handler.py
+├── prompts/                    # Dynamic system prompt middleware
+│   ├── __init__.py
 │   └── system.py
-├── schemas/                    # Pydantic response schemas
-│   └── responses.py
+├── schemas/                    # Structured output + runtime context types
+│   ├── context.py              # AgentContext (e.g. user_role)
+│   └── responses.py            # ResearchResponse (Pydantic)
 ├── tools/                      # LangChain Tools (Agent capabilities)
 │   ├── __init__.py
 │   ├── calculator.py           # Math expression evaluator
@@ -71,6 +78,19 @@ Enable structured JSON output (answer + sources + tools used):
 uv run research-agent chat start --structured
 ```
 
+Adjust the assistant style with a **role** (`user` is the default; `expert` adds more technical depth, `beginner` favors simple explanations):
+
+```bash
+uv run research-agent chat start --role expert
+uv run research-agent chat start -r beginner
+```
+
+Combine flags as needed, for example:
+
+```bash
+uv run research-agent chat start --structured --role expert
+```
+
 Show all available commands:
 
 ```bash
@@ -86,6 +106,8 @@ Agent: [Using tool: web_search_ddg]... The current weather in Berlin is ...
 
 ## Tools
 
+Today, tools are wired into the agent as a static set at startup. The intended direction is **runtime tool registration** (see Architecture) so tools can be added or narrowed after MCP `list_tools`, user-enabled integrations, or routing logic.
+
 | Tool | Description |
 |------|-------------|
 | `web_search_ddg` | Searches the web via DuckDuckGo, returns titles, snippets and URLs |
@@ -96,6 +118,8 @@ Agent: [Using tool: web_search_ddg]... The current weather in Berlin is ...
 
 - [x] **Phase 1:** Basic LangChain agent architecture & Port-Adapter setup
 - [x] **Phase 1.5:** Modular CLI via Typer (`cli/commands/` structure)
-- [ ] **Phase 2:** Structured Output & Tool Error Handling
+- [x] **Phase 2:** Structured output (`ResearchResponse` / `--structured`) & tool error handling middleware
+- [ ] **Runtime tool registration:** Adopt dynamic tool binding (middleware / per-invocation tool sets) for MCP and evolving catalogs instead of only static `tools=[...]` at agent creation
+- [ ] **Minimal MCP server (3 tools):** Ship or integrate a small reference MCP process exposing exactly three tools (e.g. ping/echo, simple lookup, and one domain-specific helper) to exercise `list_tools`, connection lifecycle, and runtime registration end-to-end
 - [ ] **Phase 3:** Migration to LangGraph (Stateful Workflows, Branching, Checkpointing)
 - [ ] **Phase 4:** Agentic RAG (Iterative Retrieval, Verifier, Confidence Gates)

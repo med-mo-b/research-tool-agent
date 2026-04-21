@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-research-agent = "research_tool_agent.cli:app"
+research-agent = "research_tool_agent.cli.app:app"
 
 [tool.uv]
 package = true
